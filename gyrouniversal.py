@@ -54,7 +54,7 @@ def PID(kp, ki, kd, erro, integral, last_error, wait_func):
     return correction, integral, last_error
 
 
-def GyroTurn(graus):
+def gyrouniversal(parametro):
     """Gira o robô em torno do seu eixo até atingir um ângulo alvo."""
     integral = 0
     last_error = 0
@@ -65,22 +65,32 @@ def GyroTurn(graus):
     kd = 0.16
 
     hub.imu.reset_heading(0)
-    alvo = graus
+    alvo = parametro
 
     def erro_angular(alvo, atual):
         return ((alvo - atual + 540) % 360) - 180
 
     erro = erro_angular(alvo, hub.imu.heading())
-    while abs(erro) > GYRO_TOL:
-        correction, integral, last_error = PID(kp, ki, kd, erro, integral, last_error, wait)
-        potencia = int(min(GYRO_MAX, max(GYRO_MIN, abs(correction))))
-        if erro > 0:
-            right_motor.dc(-potencia)
-            left_motor.dc(potencia)
-        else:
-            right_motor.dc(potencia)
-            left_motor.dc(-potencia)
-        erro = erro_angular(alvo, hub.imu.heading())
+
+    if parametro == "dois_pretos_esquerda":
+        while not color_sensor_esquerdo.reflection() < 15 and color_sensor_direito.reflection() < 15:
+            right_motor.dc(30)
+            left_motor.dc(-30)
+    elif parametro == "dois_pretos_direita":
+        while not color_sensor_esquerdo.reflection() < 15 and color_sensor_direito.reflection() < 15:
+            right_motor.dc(-30)
+            left_motor.dc(30)
+    else:
+        while abs(erro) > GYRO_TOL:
+            correction, integral, last_error = PID(kp, ki, kd, erro, integral, last_error, wait)
+            potencia = int(min(GYRO_MAX, max(GYRO_MIN, abs(correction))))
+            if erro > 0:
+                right_motor.dc(-potencia)
+                left_motor.dc(potencia)
+            else:
+                right_motor.dc(potencia)
+                left_motor.dc(-potencia)
+            erro = erro_angular(alvo, hub.imu.heading())
 
     right_motor.brake()
     left_motor.brake()
@@ -98,36 +108,8 @@ def GyroTurn(graus):
         left_motor.brake()
 
 
-def gyro_move(angulacao, velocidade, distancia):
-    """Move o robô em linha reta mantendo um ângulo alvo usando a IMU."""
-    erro = 0
-    integral = 0
-    last_error = 0
-    kp = 2
-    ki = 0.001
-    kd = 0.8
-    angulo_inicial = angulacao
-    hub.imu.reset_heading(0)
-    robot.reset(0, 0)
-    left_motor.reset_angle(0)
-    right_motor.reset_angle(0)
-    rot_atual = 0
-    while True:
-        rot_atual = abs(left_motor.angle() / 360) + abs(right_motor.angle() / 360) / 2
-        if rot_atual >= abs(distancia):
-            break
-        angulo_atual = hub.imu.heading()
-        erro = angulo_atual - angulo_inicial
-        correction, integral, last_error = PID(kp, ki, kd, erro, integral, last_error, wait)
-        left_motor.dc(velocidade - correction)
-        right_motor.dc(velocidade + correction)
-        last_error = erro
-        wait(10)
-    left_motor.brake()
-    right_motor.brake()
 
-
-def movimentation(kp, ki, kd, erro, integral, last_error, wait, speed):
+def moviment(kp, ki, kd, erro, integral, last_error, wait, speed):
     """Função auxiliar que aplica controle PID simples para manter heading = 0."""
     angulo_atual = hub.imu.heading()
     erro = angulo_atual - 0
@@ -138,7 +120,7 @@ def movimentation(kp, ki, kd, erro, integral, last_error, wait, speed):
     wait(10)
 
 
-def gyro_universal(mode, velocidade, parametro=None):
+def gyro_move_universal(mode, velocidade, parametro=None):
     """Método universal para movimentação com diferentes critérios de parada."""
     redefinir()
     erro = 0
@@ -147,7 +129,6 @@ def gyro_universal(mode, velocidade, parametro=None):
     kp = 2
     ki = 0.001
     kd = 0.8
-    angulo_inicial = 0
     hub.imu.reset_heading(0)
     robot.reset(0, 0)
     left_motor.reset_angle(0)
@@ -155,24 +136,24 @@ def gyro_universal(mode, velocidade, parametro=None):
 
     if mode == "dois_pretos":
         while color_sensor_esquerdo.reflection() < 15 and color_sensor_direito.reflection() < 15:
-            movimentation(kp, ki, kd, erro, integral, last_error, wait, velocidade)
+            moviment(kp, ki, kd, erro, integral, last_error, wait, velocidade)
         left_motor.brake()
         right_motor.brake()
     elif mode == "um_preto":
         while color_sensor_esquerdo.reflection() > 20 or color_sensor_direito.reflection() > 20:
-            movimentation(kp, ki, kd, erro, integral, last_error, wait, velocidade)
+            moviment(kp, ki, kd, erro, integral, last_error, wait, velocidade)
         left_motor.brake()
         right_motor.brake()
     elif mode == "distancia":
         while True:
-            movimentation(kp, ki, kd, erro, integral, last_error, wait, velocidade)
+            moviment(kp, ki, kd, erro, integral, last_error, wait, velocidade)
             if ultra.distance() <= parametro:
                 break
         left_motor.brake()
         right_motor.brake()
     elif mode == "angulo":
         while True:
-            movimentation(kp, ki, kd, erro, integral, last_error, wait, velocidade)
+            moviment(kp, ki, kd, erro, integral, last_error, wait, velocidade)
             rot_atual = abs(left_motor.angle() / 360) + abs(right_motor.angle() / 360) / 2
             if rot_atual >= abs(parametro):
                 break

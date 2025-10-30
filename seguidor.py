@@ -61,9 +61,9 @@ class LineFollower:
         # movimentos para localizar a linha antes de capturar o valor.
         reflexo_preto_dir = color_sensor_direito.reflection()
         reflexo_preto_esq = color_sensor_esquerdo.reflection()
-        GyroTurn(-90)
+        gyrouniversal(-90)
         print("Virou para esquerda")
-        gyro_universal('dois_pretos', -40)
+        gyro_move_universal('dois_pretos', -40)
         print("Chegou na linha preta")
         left_motor.stop()
         right_motor.stop()
@@ -71,8 +71,8 @@ class LineFollower:
             reflexo_preto_dir = color_sensor_direito.reflection()
             reflexo_preto_esq = color_sensor_esquerdo.reflection()
             print(f"Refletância atual - Esq: {reflexo_preto_esq}% Dir: {reflexo_preto_dir}%", end='\r')
-        gyro_move(0, 40, 0.5)
-        GyroTurn(90)
+        gyro_move_universal(0, 40, 0.5)
+        gyrouniversal(90)
         print("\nPreto calibrado.")
 
         hub.display.off()
@@ -139,20 +139,20 @@ class LineFollower:
                 # Para e realiza manobra de busca/recuperação
                 left_motor.stop()
                 right_motor.stop()
-                gyro_move(0, -50, 0.4)
-                GyroTurn(90)
-                gyro_move(0, 50, 2.7)
-                GyroTurn(-90)
-                gyro_move(0, 50, 1.4)
-                GyroTurn(90)
-                gyro_move(0, 50, 0.5)
+                gyro_move_universal(0, -50, 0.4)
+                gyrouniversal(90)
+                gyro_move_universal(0, 50, 2.7)
+                gyrouniversal(-90)
+                gyro_move_universal(0, 50, 1.4)
+                gyrouniversal(90)
+                gyro_move_universal(0, 50, 0.5)
                 self.ordem = 1
 
             elif ultra.distance() <= 45 and self.ordem == 1:
                 # Aciona a garra para pegar objeto com movimento preciso
                 left_motor.stop()
                 right_motor.stop()
-                gyro_move(0, 50, 0.2)
+                gyro_move_universal(0, 50, 0.2)
                 # Usa o novo método para movimento preciso da garra
                 wait(500)
 
