@@ -184,17 +184,7 @@ def normaliza(reflection, preto, branco):
 
 
 def main():
-    follower = LineFollower()
-    while True:
-        # Botão esquerdo: executa calibração e inicia o PID
-        if Button.LEFT in hub.buttons.pressed():
-            follower.calibracao()
-            hub.display.icon(Icon.TRUE)
-            follower.calculate_pid()
-        elif Button.RIGHT in hub.buttons.pressed():
-            # Botão direito: pula calibração e inicia PID (modo rápido)
-            hub.display.icon(Icon.SAD)
-            follower.calculate_pid()
+    gyro_move_universal("angulo", 50, 100)
 
 if __name__ == '__main__':
     main()

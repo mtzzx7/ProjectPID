@@ -155,5 +155,6 @@ def gyro_move_universal(mode, velocidade, parametro=None):
         while True:
             moviment(kp, ki, kd, erro, integral, last_error, wait, velocidade)
             rot_atual = abs(left_motor.angle() / 360) + abs(right_motor.angle() / 360) / 2
-            if rot_atual >= abs(parametro):
+            distancia_atual = rot_atual * 17.27
+            if distancia_atual >= abs(parametro):
                 break
