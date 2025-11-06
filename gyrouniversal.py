@@ -139,7 +139,7 @@ def gyro_move_universal(mode, velocidade, parametro=None):
     erro = 0
     integral = 0
     last_error = 0
-    kp = 2
+    kp = -2.8
     ki = 0.001
     kd = 0.8
     hub.imu.reset_heading(0)
@@ -175,8 +175,8 @@ def gyro_move_universal(mode, velocidade, parametro=None):
 
 def calibrar():
     global GYRO_MAX, GYRO_MIN
-    GYRO_MAX = 100
-    GYRO_MIN = 70
+    GYRO_MAX = 50
+    GYRO_MIN = 40
     gyrouniversal(45, "calibrar")
     gyrouniversal(-90, "calibrar")
     gyrouniversal(45, "calibrar")

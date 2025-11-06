@@ -16,9 +16,9 @@ class LineFollower:
 
     def __init__(self):
         # Ganhos PID (podem ser ajustados conforme comportamento em pista)
-        self.kp = 2   # proporcional
+        self.kp = 0.5  # proporcional
         self.ki = 0.001 # integral
-        self.kd = 0.0035  # derivativo
+        self.kd = 0  # derivativo
         self.integral = 0
         self.derivative = 0
         self.last_error = 0
@@ -32,24 +32,6 @@ class LineFollower:
         # Limiares para detecção de curva (valores normalizados)
         self.black_threshold = 20
         self.white_threshold = 80
-        # Cooldown para detecção de curva
-        self.last_curve_time = -2000 # Inicia negativo para permitir detecção imediata
-        self.curve_cooldown = 2000 # Espera 2 segundos entre detecções
-        # Cooldown para detecção de curva
-        self.last_curve_time = -2000 # Inicia negativo para permitir detecção imediata
-        self.curve_cooldown = 2000 # Espera 2 segundos entre detecções
-        # Cooldown para detecção de curva
-        self.last_curve_time = -2000 # Inicia negativo para permitir detecção imediata
-        self.curve_cooldown = 2000 # Espera 2 segundos entre detecções
-        # Cooldown para detecção de curva
-        self.last_curve_time = -2000 # Inicia negativo para permitir detecção imediata
-        self.curve_cooldown = 2000 # Espera 2 segundos entre detecções
-        # Cooldown para detecção de curva
-        self.last_curve_time = -2000 # Inicia negativo para permitir detecção imediata
-        self.curve_cooldown = 2000 # Espera 2 segundos entre detecções
-        # Cooldown para detecção de curva
-        self.last_curve_time = -2000 # Inicia negativo para permitir detecção imediata
-        self.curve_cooldown = 2000 # Espera 2 segundos entre detecções
 
 
     def detect_oscillation(self):
@@ -132,7 +114,6 @@ class LineFollower:
         - conta leituras consecutivas em preto (qnt_pretos) para detectar cruzamentos
         - interrompe quando qnt_pretos >= 12 ou botão central pressionado
         """
-        # Executa até detectar uma sequência longa de preto ou até botão central
         while Button.CENTER not in hub.buttons.pressed():
             try:
                 # Normaliza entre 0 e 100 baseado nas leituras calibradas
@@ -169,15 +150,23 @@ class LineFollower:
 
             if curve == "sharp_left":
                 print("Curva acentuada para a esquerda detectada!")
+                left_motor.stop()
+                right_motor.stop()
                 self.integral = self.integral * 0.5
+                self.kp = 1.5
                 self.speed = speed_oscilation   # Força uma correção alta para virar à esquerda
             elif curve == "sharp_right":
                 print("Curva acentuada para a direita detectada!")
+                left_motor.stop()
+                right_motor.stop()
                 self.integral = self.integral * 0.5
-                self.proporcional = self.proporcional * 1.1
+                self.kp = 1.5
                 self.speed = speed_oscilation # Força uma correção alta para virar à direita
             else:
                 self.speed = start_speed
+                self.kp = 0.5  # Redefine kp para valor normal
+
+            self.proporcional = self.kp * self.error
             # Cálculo do PID e clamp das potências de saída
             correction = self.proporcional + (self.ki * self.integral) + (self.kd * self.derivative)
 
@@ -389,9 +378,7 @@ def normaliza(reflection, preto, branco):
 
 
 def main():
-    follower = LineFollower()
-    follower.calibracao()
-    follower.calculate_pid(50, 30)
+    gyro_move_universal("angulo", 50, 90)
 
 if __name__ == '__main__':
     main()

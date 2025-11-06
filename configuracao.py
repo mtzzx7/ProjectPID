@@ -26,7 +26,7 @@ right_motor = Motor(Port.B, Direction.COUNTERCLOCKWISE)
 # Motor da garra (manipulador) - porta E neste projeto
 
 # Sensor ultrassônico usado para detecção de objetos/distância - porta F
-ultra = UltrasonicSensor(Port.F)
+ultra = UltrasonicSensor(Port.E)
 
 # Sensores de cor (reflexão) utilizados pelo seguidor de linha
 # - sensor direito: porta D
