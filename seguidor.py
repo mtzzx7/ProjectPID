@@ -1,19 +1,15 @@
 from configuracao import *
 from gyrouniversal import *
  # Importado para potenciais usos futuros, embora não estritamente necessário para esta implementação
-
 class LineFollower:
     """Classe que implementa um seguidor de linha com controle PID.
-
     A arquitetura separa:
     - calibração (medir branco e preto)
     - loop de controle PID que mantém o robô centralizado na linha
-
     Parâmetros ajustáveis:
     - kp, ki, kd: ganhos do controlador
     - limites de potência aplicados às rodas (clamp em calculate_pid)
     """
-
     def __init__(self):
         # Ganhos PID (podem ser ajustados conforme comportamento em pista)
         self.kp = 0.5  # proporcional
@@ -32,15 +28,12 @@ class LineFollower:
         # Limiares para detecção de curva (valores normalizados)
         self.black_threshold = 20
         self.white_threshold = 80
-
-
     def detect_oscillation(self):
         """
         Detecta se o robô está oscilando (mudando de direção rapidamente).
         """
         if len(self.error_history) < self.max_history_length:
             return False
-        
         # Conta quantas vezes o sinal do erro mudou (cruzou o zero)
         sign_changes = 0
         for i in range(1, len(self.error_history)):
@@ -50,7 +43,6 @@ class LineFollower:
                 sign_changes = 0
         # Se houver muitas mudanças de sinal, considera-se que está oscilando
         return sign_changes > self.max_history_length * 0.6
-
     def detect_sharp_curve(self):
         """
         Detecta uma curva acentuada com base em valores extremos dos sensores normalizados.
@@ -63,25 +55,19 @@ class LineFollower:
         elif self.norm_esq < self.black_threshold and self.norm_dir > self.white_threshold:
             return "sharp_right"
         return None
-
     def calibracao(self):
         """Processo de calibração automático por "scan" com giroscópio.
-
         O robô gira para a esquerda e depois para a direita usando o giroscópio
         para garantir uma varredura controlada da superfície.
         """
         print("Iniciando calibração por scan com giroscópio...")
         hub.display.icon(Icon.RIGHT)
-
         min_esq, max_esq = 100, 0
         min_dir, max_dir = 100, 0
-
         calibrar()
-
         # --- Cálculo da Margem Dinâmica ---
         range_esq = max_esq - min_esq
         range_dir = max_dir - min_dir
-
         if range_esq < 20 or range_dir < 20:
             print("\n!!! FALHA NA CALIBRAÇÃO !!!")
             print("Diferença entre branco e preto muito pequena. Usando valores padrão.")
@@ -94,13 +80,10 @@ class LineFollower:
             self.reflexo_branco_esq = max_esq - margin_esq
             self.reflexo_preto_dir = min_dir + margin_dir
             self.reflexo_branco_dir = max_dir - margin_dir
-
         self.is_calibrated = True
-
         print("\nCalibração por scan concluída!")
         print(f"Sensor Esquerdo (Preto/Branco): {self.reflexo_preto_esq:.1f}% / {self.reflexo_branco_esq:.1f}%")
         print(f"Sensor Direito (Preto/Branco): {self.reflexo_preto_dir:.1f}% / {self.reflexo_branco_dir:.1f}%")
-
     def calculate_pid(self, start_speed, speed_oscilation):
         """Loop principal do controlador PID do seguidor de linha.
         Estrutura:
@@ -194,9 +177,6 @@ class LineFollower:
             wait(10)  # pequeno delay para evitar loop apertado
         left_motor.stop()
         right_motor.stop()
-
-    
-
     def _calculate_profile_speed(self, current_abs_angle_rotated, total_abs_angle, startspeed, maxspeed, endspeed, accelerate_ratio, decelerate_ratio):
         """
         Calcula a velocidade alvo com base em um perfil de velocidade trapezoidal.
@@ -208,15 +188,12 @@ class LineFollower:
         """
         if total_abs_angle == 0:
             return 0 # Sem rotação, sem velocidade
-
         accelerate_angle_length = total_abs_angle * accelerate_ratio
         decelerate_angle_length = total_abs_angle * decelerate_ratio
-
         # Garante que as velocidades são não-negativas para o cálculo; o sinal é aplicado depois.
         startspeed = abs(startspeed)
         maxspeed = abs(maxspeed)
         endspeed = abs(endspeed)
-
         # Fase de aceleração
         if current_abs_angle_rotated < accelerate_angle_length:
             if accelerate_angle_length == 0: return startspeed # Evita divisão por zero se não houver fase de aceleração
@@ -232,7 +209,6 @@ class LineFollower:
         # Fase de velocidade constante
         else:
             return maxspeed
-
     def arcRotation(self, radius, angle, startspeed, maxspeed, endspeed, addspeed=0.3, brakeStart=0.7, stopMethod=None, generator=None, stop=True, parametro=None):
         """
         Função para fazer o robô descrever uma curva com um raio e ângulo especificados.
@@ -251,34 +227,26 @@ class LineFollower:
         generator: Um gerador opcional que executa algo em paralelo durante a condução. Não implementado nesta versão. Padrão: None
         stop: Um booleano que determina se o robô deve parar os motores após a condução. Padrão: True
         """
-
         # Placeholder para cancelamento externo, se necessário (ex: um membro da classe self.cancel_flag)
         # if self.cancel_flag:
         #     print("Rotação em arco cancelada.")
         #     return
-
         # Calibração do giroscópio conforme o exemplo
         calibrated_angle = angle * (2400 / 2443)
-
         # Leitura inicial do giroscópio e ângulo alvo
         initial_heading = hub.imu.heading()
         target_heading = initial_heading + calibrated_angle
-
         # Rastreia o ângulo total rotacionado para o perfil de velocidade
         total_abs_angle_to_rotate = abs(calibrated_angle)
         current_abs_angle_rotated = 0.0
         last_heading = initial_heading
-
         # Determina a direção geral do movimento (para frente/para trás)
         movement_direction_sign = 1 if startspeed >= 0 else -1
-
         # Calcula os fatores de velocidade para as rodas interna e externa
         # 'radius' é o raio do caminho da roda interna.
         # 'axle_track' é a distância entre os centros das rodas, de configuracao.py.
-
         left_speed_factor = 1.0
         right_speed_factor = 1.0
-
         if radius == 0: # Curva de ponto (pivot turn)
             if angle > 0: # Curva de ponto para a esquerda
                 left_speed_factor = -1.0 # Roda esquerda para trás
@@ -299,7 +267,6 @@ class LineFollower:
                 # Motor direito é interno, Motor esquerdo é externo
                 right_speed_factor = 1.0
                 left_speed_factor = speed_ratio_outer_inner
-
         loop = True
         while loop:
             # if self.cancel_flag: # Placeholder para cancelamento externo
@@ -310,40 +277,31 @@ class LineFollower:
             #         next(generator)
             #     except StopIteration:
             #         generator = None # Gerador finalizado
-
             current_heading = hub.imu.heading()
-
             # Calcula a mudança de ângulo, tratando a passagem por 0/360 para o caminho mais curto
             heading_delta = (current_heading - last_heading + 540) % 360 - 180
             current_abs_angle_rotated += abs(heading_delta) # Acumula o ângulo absoluto rotacionado
-
             # Determina a magnitude da velocidade alvo com base no perfil
             current_profile_speed_magnitude = self._calculate_profile_speed(
                 current_abs_angle_rotated, total_abs_angle_to_rotate,
                 startspeed, maxspeed, endspeed,
                 addspeed, 1 - brakeStart # 1 - brakeStart fornece a razão de desaceleração
             )
-
             # Aplica a direção geral do movimento (para frente/para trás)
             effective_speed = current_profile_speed_magnitude * movement_direction_sign
-
             # Calcula as potências reais dos motores e as limita entre -100 e 100
             left_power = max(min(int(effective_speed * left_speed_factor), 100), -100)
             right_power = max(min(int(effective_speed * right_speed_factor), 100), -100)
-
             # Aplica a potência aos motores
             left_motor.dc(left_power)
             right_motor.dc(right_power)
-
             # Atualiza a última leitura do giroscópio para a próxima iteração
             last_heading = current_heading
-
             # Verifica as condições de término
             if stopMethod is not None:
                 if stopMethod.loop():
                     loop = False
                     break
-
             # Verifica se o ângulo alvo foi atingido
             if current_abs_angle_rotated >= total_abs_angle_to_rotate:
                 loop = False
@@ -351,34 +309,24 @@ class LineFollower:
             if abs(left_motor.angle() / 360) + abs(right_motor.angle() / 360) / 2 >= parametro:
                 loop = False
                 break
-
             wait(10) # Pequeno atraso para evitar loop apertado
-
         # Para os motores se solicitado
         if stop:
             left_motor.stop()
             right_motor.stop()
-
         return # Fim de arcRotation
-
-
 # Função global para normalizar leitura dos sensores
 def normaliza(reflection, preto, branco):
     """Normaliza a leitura de refletância para uma escala 0..100.
-
     - reflection: leitura atual do sensor
     - preto: valor medido durante calibração para preto (mínimo)
     - branco: valor medido durante calibração para branco (máximo)
-
     Retorna 0 se branco == preto (evita divisão por zero).
     """
     if branco == preto:
         return 0
     return (reflection - preto) / (branco - preto) * 100
-
-
 def main():
     gyro_move_universal("angulo", 50, 90)
-
 if __name__ == '__main__':
     main()
