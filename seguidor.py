@@ -12,9 +12,9 @@ class LineFollower:
     """
     def __init__(self):
         # Ganhos PID (podem ser ajustados conforme comportamento em pista)
-        self.kp = 0.5  # proporcional
-        self.ki = 0.001 # integral
-        self.kd = 0  # derivativo
+        self.kp = 1.6# proporcional
+        self.ki = 0.007 # integral #3
+        self.kd = 0.03# derivativo
         self.integral = 0
         self.derivative = 0
         self.last_error = 0
@@ -28,6 +28,8 @@ class LineFollower:
         # Limiares para detecção de curva (valores normalizados)
         self.black_threshold = 20
         self.white_threshold = 80
+        self.timer = StopWatch()
+        self.dt = 0
     def detect_oscillation(self):
         """
         Detecta se o robô está oscilando (mudando de direção rapidamente).
@@ -39,8 +41,6 @@ class LineFollower:
         for i in range(1, len(self.error_history)):
             if self.error_history[i] * self.error_history[i-1] < 0:
                 sign_changes += 1
-            else:
-                sign_changes = 0
         # Se houver muitas mudanças de sinal, considera-se que está oscilando
         return sign_changes > self.max_history_length * 0.6
     def detect_sharp_curve(self):
@@ -54,7 +54,8 @@ class LineFollower:
         # Curva acentuada para a direita (sensor esquerdo vê preto)
         elif self.norm_esq < self.black_threshold and self.norm_dir > self.white_threshold:
             return "sharp_right"
-        return None
+        else:
+            return None
     def calibracao(self):
         """Processo de calibração automático por "scan" com giroscópio.
         O robô gira para a esquerda e depois para a direita usando o giroscópio
@@ -108,10 +109,16 @@ class LineFollower:
                 self.norm_dir = color_sensor_direito.reflection()
 
             # Erro positivo => mais reflexo à esquerda (ajustar para direita)
+
+            self.dt = self.timer.time() / 1000  # transforma ms -> segundos
+            self.timer.reset()
+
+            if self.dt <= 0:
+                self.dt = 0.01  # proteção
             self.error = self.norm_esq - self.norm_dir
             self.proporcional = self.kp * self.error
-            self.integral += self.error
-            self.derivative = self.error - self.last_error
+            self.integral += self.error * self.dt
+            self.derivative = (self.error - self.last_error)/self.dt
             self.last_error = self.error
             self.error_history.append(self.error)
             if len(self.error_history) > self.max_history_length:
@@ -124,11 +131,12 @@ class LineFollower:
             curve = self.detect_sharp_curve()
             # Ação para curva será tratada no cálculo de correção abaixo
 
-            # Anti-windup simples para integral
-            if self.integral > 100:
-                self.integral = 0
-            elif self.integral < -100:
-                self.integral = 0
+            # Anti-windup para integral, evitando que o termo cresça indefinidamente
+            integral_limit = 500  # Um valor empírico, pode ser ajustado
+            if self.integral > integral_limit:
+                self.integral = integral_limit
+            elif self.integral < -integral_limit:
+                self.integral = -integral_limit
 
 
             if curve == "sharp_left":
@@ -136,47 +144,42 @@ class LineFollower:
                 left_motor.stop()
                 right_motor.stop()
                 self.integral = self.integral * 0.5
-                self.kp = 1.5
                 self.speed = speed_oscilation   # Força uma correção alta para virar à esquerda
             elif curve == "sharp_right":
                 print("Curva acentuada para a direita detectada!")
                 left_motor.stop()
                 right_motor.stop()
                 self.integral = self.integral * 0.5
-                self.kp = 1.5
                 self.speed = speed_oscilation # Força uma correção alta para virar à direita
             else:
-                self.speed = start_speed
-                self.kp = 0.5  # Redefine kp para valor normal
-
-            self.proporcional = self.kp * self.error
+                self.speed = start_speed 
             # Cálculo do PID e clamp das potências de saída
             correction = self.proporcional + (self.ki * self.integral) + (self.kd * self.derivative)
 
             # Lógica para curvas acentuadas: sobrepõe a correção do PID
 
-            left_power = max(min(self.speed + correction, 100), -100)
-            right_power = max(min(self.speed - correction, 100), -100)
+            left_power = max(min(-self.speed - correction, 100), -100)
+            right_power = max(min(-self.speed + correction, 100), -100)
             left_motor.dc(left_power)
             right_motor.dc(right_power)
             # Sequência de ação ao detectar obstáculo próximo pelo ultrassom
-            if ultra.distance() <= 60 and self.ordem == 0:
-                # Para e realiza manobra de busca/recuperação
-                left_motor.stop()
-                right_motor.stop()
-                gyro_move_universal("angulo", -50, 20)
-                gyrouniversal(90)
-                gyro_move_universal("angulo", 50, 80)
-                gyrouniversal(-90)
-                gyro_move_universal("angulo", 50, 100)
-                gyrouniversal(-90)
-                gyro_move_universal("angulo", 50, 80)
-                gyrouniversal(90)
-                gyro_move_universal("angulo", 50, 20)
-                self.ordem = 1
-            wait(10)  # pequeno delay para evitar loop apertado
-        left_motor.stop()
-        right_motor.stop()
+        #     if ultra.distance() <= 60 and self.ordem == 0:
+        #         # Para e realiza manobra de busca/recuperação
+        #         left_motor.stop()
+        #         right_motor.stop()
+        #         gyro_move_universal("angulo", -50, 20)
+        #         gyrouniversal(90)
+        #         gyro_move_universal("angulo", 50, 80)
+        #         gyrouniversal(-90)
+        #         gyro_move_universal("angulo", 50, 100)
+        #         gyrouniversal(-90)
+        #         gyro_move_universal("angulo", 50, 80)
+        #         gyrouniversal(90)
+        #         gyro_move_universal("angulo", 50, 20)
+        #         self.ordem = 1
+        #     wait(10)  # pequeno delay para evitar loop apertado
+        # left_motor.stop()
+        # right_motor.stop()
     def _calculate_profile_speed(self, current_abs_angle_rotated, total_abs_angle, startspeed, maxspeed, endspeed, accelerate_ratio, decelerate_ratio):
         """
         Calcula a velocidade alvo com base em um perfil de velocidade trapezoidal.
@@ -327,6 +330,7 @@ def normaliza(reflection, preto, branco):
         return 0
     return (reflection - preto) / (branco - preto) * 100
 def main():
-    gyro_move_universal("angulo", 50, 90)
+    seguidor = LineFollower()
+    seguidor.calculate_pid(start_speed=50, speed_oscilation=35)
 if __name__ == '__main__':
     main()
