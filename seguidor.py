@@ -12,15 +12,15 @@ class LineFollower:
     """
     def __init__(self):
         # Ganhos PID (podem ser ajustados conforme comportamento em pista)
-        self.kp = 1.6# proporcional
-        self.ki = 0.007 # integral #3
-        self.kd = 0.03# derivativo
+        self.kp = 1.6 # proporcional
+        self.ki = 0.007 # integral
+        self.kd = 0.03 # derivativo
         self.integral = 0
         self.derivative = 0
         self.last_error = 0
         self.error = 0
         self.error_history = []
-        self.max_history_length = 5  # comprimento do histórico para detectar oscilações
+        self.max_history_length = 5 # comprimento do histórico para detectar oscilações
         self.is_calibrated = False
         self.timer = StopWatch()
         self.ordem = 0 # estado para sequência de ações (manipulador, etc.)
@@ -110,7 +110,8 @@ class LineFollower:
 
             # Erro positivo => mais reflexo à esquerda (ajustar para direita)
 
-            self.dt = self.timer.time() / 1000  # transforma ms -> segundos
+            self.dt = self.timer.time() / 1000 
+            print(self.dt) # transforma ms -> segundos
             self.timer.reset()
 
             if self.dt <= 0:
