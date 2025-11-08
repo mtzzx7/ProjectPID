@@ -1,0 +1,11 @@
+Inicializa kp, ki, kd, objetivo, tolerancia
+
+erro = objetivo - valor_atual
+
+P = kp*erro
+I = 0 
+D = kd*d(erro)/dt
+
+U = P + I + D
+
+Enquanto 

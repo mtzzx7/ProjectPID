@@ -10,7 +10,6 @@ Este módulo fornece funções para:
 Observação: este módulo importa objetos do `config.py` (hub, motores, sensores,
 robot) para reutilizar a inicialização de hardware feita lá.
 """
-
 from pybricks.hubs import PrimeHub
 from pybricks.pupdevices import Motor, ColorSensor, UltrasonicSensor
 from pybricks.parameters import Button, Color, Direction, Port, Stop, Icon
@@ -43,9 +42,9 @@ max_dir = 0
 
 
 # Parâmetros do GyroTurn
-GYRO_TOL = 0.05
-GYRO_MIN = 30
-GYRO_MAX = 70
+GYRO_TOL = 5
+GYRO_MIN = 40
+GYRO_MAX = 60
 
 
 def PID(kp, ki, kd, erro, integral, last_error, wait_func):
@@ -64,9 +63,9 @@ def gyrouniversal(parametro , rotate_mode=None):
     last_error = 0
     correction = 0
 
-    kp = 6
-    ki = 0.0008
-    kd = 0.16
+    kp = 100
+    ki = 0.001
+    kd = 0.3
 
     hub.imu.reset_heading(0)
     alvo = parametro
@@ -105,20 +104,22 @@ def gyrouniversal(parametro , rotate_mode=None):
                 left_motor.dc(0)
         erro = erro_angular(alvo, hub.imu.heading())
 
-    right_motor.brake()
-    left_motor.brake()
+    right_motor.hold()
+    left_motor.hold()
 
     erro_residual = erro_angular(alvo, hub.imu.heading())
-    if abs(erro_residual) > 0.2:
-        pulso_pot = 5
+    if abs(erro_residual) > 5:
+        pulso_pot = 40
         if erro_residual > 0:
             right_motor.dc(pulso_pot)
             left_motor.dc(-pulso_pot)
         else:
             right_motor.dc(-pulso_pot)
             left_motor.dc(pulso_pot)
-        right_motor.brake()
-        left_motor.brake()
+        right_motor.hold()
+        left_motor.hold()
+
+
 
 
 
@@ -139,7 +140,7 @@ def gyro_move_universal(mode, velocidade, parametro=None):
     erro = 0
     integral = 0
     last_error = 0
-    kp = -2.8
+    kp = 2.8
     ki = 0.001
     kd = 0.8
     hub.imu.reset_heading(0)
@@ -168,14 +169,15 @@ def gyro_move_universal(mode, velocidade, parametro=None):
     elif mode == "angulo":
         while True:
             moviment(kp, ki, kd, erro, integral, last_error, wait, velocidade)
-            rot_atual = abs(left_motor.angle() / 360) + abs(right_motor.angle() / 360) / 2
-            distancia_atual = rot_atual * 17.27
-            if distancia_atual >= abs(parametro):
+            rot_atual = left_motor.angle() + right_motor.angle() / 2
+            distancia_atual = rot_atual / 360 * (2 * 3.14159 * (55 / 10))
+
+            if abs(distancia_atual) >= abs(parametro):
                 break
 
 def calibrar():
     global GYRO_MAX, GYRO_MIN
-    GYRO_MAX = 50
+    GYRO_MAX = 100
     GYRO_MIN = 40
     gyrouniversal(45, "calibrar")
     gyrouniversal(-90, "calibrar")
@@ -194,3 +196,85 @@ def ler_e_atualizar():
     max_esq = max(max_esq, ref_esq)
     min_dir = min(min_dir, ref_dir)
     max_dir = max(max_dir, ref_dir)
+
+
+def lqr_move(distancia_alvo_cm, potencia_base=50):
+    """
+    Move o robô em linha reta usando um controlador LQR para manter a direção (guinada).
+
+    Esta função utiliza o giroscópio (IMU) para ler o ângulo de guinada (heading)
+    e sua taxa de variação. Um controlador LQR calcula a correção necessária
+    para manter o robô andando em linha reta (heading = 0).
+
+    AVISO IMPORTANTE:
+    A matriz de ganhos 'K' abaixo é um EXEMPLO. Para que o robô funcione
+    corretamente, você PRECISA AJUSTAR esses ganhos experimentalmente para
+    a massa, geometria e motores do SEU robô.
+
+    Args:
+        distancia_alvo_cm (float): Distância que o robô deve percorrer em cm.
+        potencia_base (int): Potência base (de 0 a 100) a ser aplicada aos motores.
+    """
+    # --- INÍCIO DA CONFIGURAÇÃO LQR PARA GUINADA (HEADING) ---
+
+    # ATENÇÃO: ESTA MATRIZ DE GANHO 'K' É APENAS UM EXEMPLO!
+    # VOCÊ PRECISA AJUSTAR OS VALORES PARA O SEU ROBÔ!
+    # Formato: [ganho_angulo_guinada, ganho_taxa_guinada]
+    # - ganho_angulo_guinada (K[0]): Reage ao erro de ângulo. Um valor maior
+    #   fará o robô corrigir a direção de forma mais agressiva.
+    # - ganho_taxa_guinada (K[1]): Amortece a correção, evitando oscilações.
+    #   Um valor maior torna o robô mais "suave" ao voltar para a linha reta.
+    K = [1.14, 1]  # Ponto de partida para ajuste
+
+    # Constantes do robô (ajuste conforme necessário)
+    RAIO_RODA_MM = 55 # Raio da roda em milímetros
+
+    # --- FIM DA CONFIGURAÇÃO LQR ---
+
+    # Inicialização de hardware e estado
+    hub.imu.reset_heading(0)
+    left_motor.reset_angle(0)
+    right_motor.reset_angle(0)
+
+    # Loop de controle principal
+    while True:
+        # --- Verificação da Condição de Parada ---
+        # Calcula a distância percorrida com base na rotação média dos motores
+        motor_angle_deg = (left_motor.angle() + right_motor.angle()) / 2
+        distancia_percorrida_cm = (motor_angle_deg / 360) * (2 * 3.14159 * (RAIO_RODA_MM / 10))
+        if abs(distancia_percorrida_cm) >= abs(distancia_alvo_cm):
+            break
+
+        # --- Lógica do Controlador LQR para Guinada ---
+        # O objetivo é manter a guinada (heading) em 0 para andar em linha reta.
+        # O LQR usa o "State-Feedback Control": u = -Kx
+        # onde 'u' é a correção e 'x' é o vetor de estado [ângulo, taxa_do_ângulo].
+
+        # 1. Leitura dos Sensores para montar o vetor de estado 'x'
+        # Estado 1: Ângulo de guinada (heading)
+        heading_angle = hub.imu.heading()
+        # Estado 2: Taxa de variação da guinada (velocidade angular no eixo Z)
+        # O índice [2] corresponde ao eixo Z (vertical), que é a guinada.
+        heading_rate = hub.imu.angular_velocity()[2]
+
+        # 2. Calcular a saída de controle 'u' (a correção)
+        # Multiplica cada estado pelo seu ganho correspondente e soma tudo.
+        correction = -(K[0] * heading_angle + K[1] * heading_rate)
+
+        # 3. Aplicar a potência base e a correção aos motores
+        # A correção é subtraída de um lado e somada ao outro para girar o robô.
+        left_power = potencia_base - correction
+        right_power = potencia_base + correction
+
+        # Limita a potência para a faixa segura do motor [-100, 100]
+        left_power = max(-100, min(100, left_power))
+        right_power = max(-100, min(100, right_power))
+
+        left_motor.dc(left_power)
+        right_motor.dc(right_power)
+
+        wait(10)  # Pequena pausa para não sobrecarregar o loop
+
+    # Parar os motores ao final
+    left_motor.brake()
+    right_motor.brake()

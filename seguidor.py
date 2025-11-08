@@ -30,6 +30,7 @@ class LineFollower:
         self.white_threshold = 80
         self.timer = StopWatch()
         self.dt = 0
+
     def detect_oscillation(self):
         """
         Detecta se o robô está oscilando (mudando de direção rapidamente).
@@ -85,6 +86,7 @@ class LineFollower:
         print("\nCalibração por scan concluída!")
         print(f"Sensor Esquerdo (Preto/Branco): {self.reflexo_preto_esq:.1f}% / {self.reflexo_branco_esq:.1f}%")
         print(f"Sensor Direito (Preto/Branco): {self.reflexo_preto_dir:.1f}% / {self.reflexo_branco_dir:.1f}%")
+
     def calculate_pid(self, start_speed, speed_oscilation):
         """Loop principal do controlador PID do seguidor de linha.
         Estrutura:
@@ -99,6 +101,7 @@ class LineFollower:
         - interrompe quando qnt_pretos >= 12 ou botão central pressionado
         """
         while Button.CENTER not in hub.buttons.pressed():
+            # 1. Normalização dos sensores (MOVIDO PARA CIMA)
             try:
                 # Normaliza entre 0 e 100 baseado nas leituras calibradas
                 self.norm_dir = normaliza(color_sensor_direito.reflection(), self.reflexo_preto_dir, self.reflexo_branco_dir)
@@ -108,79 +111,60 @@ class LineFollower:
                 self.norm_esq = color_sensor_esquerdo.reflection()
                 self.norm_dir = color_sensor_direito.reflection()
 
-            # Erro positivo => mais reflexo à esquerda (ajustar para direita)
+            # 2. Detecção de eventos (agora com os valores normalizados disponíveis)
+            if self.detect_oscillation():
+                print("Oscilação detectada!")
 
+            curve = self.detect_sharp_curve()
+
+            # 3. Cálculo do PID
             self.dt = self.timer.time() / 1000 
-            print(self.dt) # transforma ms -> segundos
             self.timer.reset()
 
             if self.dt <= 0:
                 self.dt = 0.01  # proteção
+            
             self.error = self.norm_esq - self.norm_dir
             self.proporcional = self.kp * self.error
             self.integral += self.error * self.dt
-            self.derivative = (self.error - self.last_error)/self.dt
+            self.derivative = (self.error - self.last_error) / self.dt
             self.last_error = self.error
             self.error_history.append(self.error)
             if len(self.error_history) > self.max_history_length:
                 self.error_history.pop(0)
 
-            # --- Detecção de Oscilação e Curva Acentuada ---
-            if self.detect_oscillation():
-                print("Oscilação detectada!")
-
-            curve = self.detect_sharp_curve()
-            # Ação para curva será tratada no cálculo de correção abaixo
-
-            # Anti-windup para integral, evitando que o termo cresça indefinidamente
-            integral_limit = 500  # Um valor empírico, pode ser ajustado
+            # Anti-windup para integral
+            integral_limit = 500
             if self.integral > integral_limit:
                 self.integral = integral_limit
             elif self.integral < -integral_limit:
                 self.integral = -integral_limit
 
-
+            # 4. Lógica de Ação baseada em eventos
             if curve == "sharp_left":
                 print("Curva acentuada para a esquerda detectada!")
-                left_motor.stop()
-                right_motor.stop()
-                self.integral = self.integral * 0.5
-                self.speed = speed_oscilation   # Força uma correção alta para virar à esquerda
+                self.integral *= 0.5 # Reduz o integral para não exagerar na saída da curva
+                self.speed = speed_oscilation
             elif curve == "sharp_right":
                 print("Curva acentuada para a direita detectada!")
-                left_motor.stop()
-                right_motor.stop()
-                self.integral = self.integral * 0.5
-                self.speed = speed_oscilation # Força uma correção alta para virar à direita
+                self.integral *= 0.5
+                self.speed = speed_oscilation
             else:
                 self.speed = start_speed 
-            # Cálculo do PID e clamp das potências de saída
+            
+            # 5. Cálculo final da correção e aplicação aos motores
             correction = self.proporcional + (self.ki * self.integral) + (self.kd * self.derivative)
-
-            # Lógica para curvas acentuadas: sobrepõe a correção do PID
 
             left_power = max(min(-self.speed - correction, 100), -100)
             right_power = max(min(-self.speed + correction, 100), -100)
             left_motor.dc(left_power)
             right_motor.dc(right_power)
-            # Sequência de ação ao detectar obstáculo próximo pelo ultrassom
-        #     if ultra.distance() <= 60 and self.ordem == 0:
-        #         # Para e realiza manobra de busca/recuperação
-        #         left_motor.stop()
-        #         right_motor.stop()
-        #         gyro_move_universal("angulo", -50, 20)
-        #         gyrouniversal(90)
-        #         gyro_move_universal("angulo", 50, 80)
-        #         gyrouniversal(-90)
-        #         gyro_move_universal("angulo", 50, 100)
-        #         gyrouniversal(-90)
-        #         gyro_move_universal("angulo", 50, 80)
-        #         gyrouniversal(90)
-        #         gyro_move_universal("angulo", 50, 20)
-        #         self.ordem = 1
-        #     wait(10)  # pequeno delay para evitar loop apertado
-        # left_motor.stop()
-        # right_motor.stop()
+            
+            wait(10)
+        
+        left_motor.stop()
+        right_motor.stop()
+
     def _calculate_profile_speed(self, current_abs_angle_rotated, total_abs_angle, startspeed, maxspeed, endspeed, accelerate_ratio, decelerate_ratio):
         """
         Calcula a velocidade alvo com base em um perfil de velocidade trapezoidal.
@@ -332,6 +316,6 @@ def normaliza(reflection, preto, branco):
     return (reflection - preto) / (branco - preto) * 100
 def main():
     seguidor = LineFollower()
-    seguidor.calculate_pid(start_speed=50, speed_oscilation=35)
+    seguidor.calculate_pid(40, 35)
 if __name__ == '__main__':
     main()
