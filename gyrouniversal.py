@@ -63,7 +63,7 @@ def gyrouniversal(parametro , rotate_mode=None):
     last_error = 0
     correction = 0
 
-    kp = 100
+    kp = 2
     ki = 0.001
     kd = 0.3
 
@@ -81,27 +81,27 @@ def gyrouniversal(parametro , rotate_mode=None):
             ler_e_atualizar()
         if rotate_mode == None:
             if erro > 0:
-                right_motor.dc(-potencia)
-                left_motor.dc(potencia)
-            else:
                 right_motor.dc(potencia)
                 left_motor.dc(-potencia)
+            else:
+                right_motor.dc(-potencia)
+                left_motor.dc(potencia)
             
         elif rotate_mode == "calibrar":
             if erro > 0:
-                right_motor.dc(-potencia)
-                left_motor.dc(potencia)
-            else:
                 right_motor.dc(potencia)
                 left_motor.dc(-potencia)
+            else:
+                right_motor.dc(-potencia)
+                left_motor.dc(potencia)
 
         else:
             if erro > 0:
-                right_motor.dc(0)
-                left_motor.dc(potencia)
-            else:
                 right_motor.dc(potencia)
                 left_motor.dc(0)
+            else:
+                right_motor.dc(0)
+                left_motor.dc(potencia)
         erro = erro_angular(alvo, hub.imu.heading())
 
     right_motor.hold()
@@ -140,7 +140,7 @@ def gyro_move_universal(mode, velocidade, parametro=None):
     erro = 0
     integral = 0
     last_error = 0
-    kp = 2.8
+    kp = -2.8
     ki = 0.001
     kd = 0.8
     hub.imu.reset_heading(0)
@@ -168,11 +168,13 @@ def gyro_move_universal(mode, velocidade, parametro=None):
         right_motor.brake()
     elif mode == "angulo":
         while True:
+            if velocidade < 0:
+                kp = -2
             moviment(kp, ki, kd, erro, integral, last_error, wait, velocidade)
             rot_atual = left_motor.angle() + right_motor.angle() / 2
-            distancia_atual = rot_atual / 360 * (2 * 3.14159 * (55 / 10))
+            distancia_atual = abs(rot_atual) / 360 * (2 * 3.14159 * (55 / 10))
 
-            if abs(distancia_atual) >= abs(parametro):
+            if distancia_atual >= abs(parametro):
                 break
 
 def calibrar():

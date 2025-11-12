@@ -155,11 +155,22 @@ class LineFollower:
             # 5. Cálculo final da correção e aplicação aos motores
             correction = self.proporcional + (self.ki * self.integral) + (self.kd * self.derivative)
 
-            left_power = max(min(-self.speed - correction, 100), -100)
-            right_power = max(min(-self.speed + correction, 100), -100)
+            left_power = max(min(self.speed - correction, 100), -100)
+            right_power = max(min(self.speed + correction, 100), -100)
             left_motor.dc(left_power)
-            right_motor.dc(right_power)
-            
+            right_motor.dc(right_power)            
+            """
+            if ultra.distance() <= 50:
+                gyro_move_universal("angulo", -35, 50)
+                gyrouniversal(90)
+                seguidor = LineFollower()
+                seguidor.arcRotation(100, -100, 35, 60, 35, addspeed=0.3, brakeStart=0.7, stopMethod=None, generator=None, stop=True, parametro=7)
+                gyrouniversal(-90)
+                wait(1000)
+                gyro_move_universal("dois_pretos", 45)
+                gyro_move_universal("angulo", 35, 10)
+                gyrouniversal(90)
+            """
             wait(10)
         
         left_motor.stop()
@@ -316,6 +327,6 @@ def normaliza(reflection, preto, branco):
     return (reflection - preto) / (branco - preto) * 100
 def main():
     seguidor = LineFollower()
-    seguidor.calculate_pid(40, 35)
+    seguidor.calculate_pid(50,35)
 if __name__ == '__main__':
     main()

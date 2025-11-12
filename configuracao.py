@@ -20,8 +20,8 @@ hub = PrimeHub()
 # - left_motor: roda esquerda conectada na porta A
 # - right_motor: roda direita conectada na porta B
 # Direction.CLOCKWISE / COUNTERCLOCKWISE ajusta sentido positivo da rotação
-left_motor = Motor(Port.A, Direction.COUNTERCLOCKWISE)
-right_motor = Motor(Port.B, Direction.CLOCKWISE)
+left_motor = Motor(Port.A, Direction.CLOCKWISE)
+right_motor = Motor(Port.B, Direction.COUNTERCLOCKWISE)
 
 # Motor da garra (manipulador) - porta E neste projeto
 
@@ -31,8 +31,8 @@ ultra = UltrasonicSensor(Port.E)
 # Sensores de cor (reflexão) utilizados pelo seguidor de linha
 # - sensor direito: porta D
 # - sensor esquerdo: porta C
-color_sensor_direito = ColorSensor(Port.C)
-color_sensor_esquerdo = ColorSensor(Port.D)
+color_sensor_direito = ColorSensor(Port.D)
+color_sensor_esquerdo = ColorSensor(Port.C)
 
 
 # Parâmetros físicos do robô (importante para o DriveBase)
