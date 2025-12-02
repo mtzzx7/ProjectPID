@@ -20,14 +20,12 @@ hub = PrimeHub()
 # - left_motor: roda esquerda conectada na porta A
 # - right_motor: roda direita conectada na porta B
 # Direction.CLOCKWISE / COUNTERCLOCKWISE ajusta sentido positivo da rotação
-left_motor = Motor(Port.A, Direction.CLOCKWISE)
-right_motor = Motor(Port.B, Direction.COUNTERCLOCKWISE)
+left_motor = Motor(Port.A, Direction.COUNTERCLOCKWISE)
+right_motor = Motor(Port.B, Direction.CLOCKWISE)
 
 # Motor da garra (manipulador) - porta E neste projeto
 
 # Sensor ultrassônico usado para detecção de objetos/distância - porta F
-ultra = UltrasonicSensor(Port.E)
-
 # Sensores de cor (reflexão) utilizados pelo seguidor de linha
 # - sensor direito: porta D
 # - sensor esquerdo: porta C

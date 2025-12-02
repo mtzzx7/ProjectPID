@@ -12,7 +12,7 @@ class LineFollower:
     """
     def __init__(self):
         # Ganhos PID (podem ser ajustados conforme comportamento em pista)
-        self.kp = 1.6 # proporcional
+        self.kp = 2 # proporcional
         self.ki = 0.007 # integral
         self.kd = 0.03 # derivativo
         self.integral = 0
@@ -155,8 +155,8 @@ class LineFollower:
             # 5. Cálculo final da correção e aplicação aos motores
             correction = self.proporcional + (self.ki * self.integral) + (self.kd * self.derivative)
 
-            left_power = max(min(self.speed - correction, 100), -100)
-            right_power = max(min(self.speed + correction, 100), -100)
+            left_power = self.speed - correction
+            right_power = self.speed + correction
             left_motor.dc(left_power)
             right_motor.dc(right_power)            
             """
@@ -305,7 +305,9 @@ class LineFollower:
             if current_abs_angle_rotated >= total_abs_angle_to_rotate:
                 loop = False
                 break
-            if abs(left_motor.angle() / 360) + abs(right_motor.angle() / 360) / 2 >= parametro:
+            # Calcula a rotação média correta dos dois motores (corrige precedência)
+            avg_rotations = (abs(left_motor.angle()) + abs(right_motor.angle())) / 2 / 360
+            if avg_rotations >= parametro:
                 loop = False
                 break
             wait(10) # Pequeno atraso para evitar loop apertado
@@ -325,8 +327,17 @@ def normaliza(reflection, preto, branco):
     if branco == preto:
         return 0
     return (reflection - preto) / (branco - preto) * 100
+
 def main():
-    seguidor = LineFollower()
-    seguidor.calculate_pid(50,35)
+    # Para alterar a velocidade do robot.straight(), use robot.settings().
+    # O valor é em milímetros por segundo (mm/s).
+    # Exemplo: definindo a velocidade para 200 mm/s.
+    robot.settings(straight_speed=800)
+    gyro_move_universal("angulo", 100, 140)
+    wait(10)
+    gyro_move_universal("angulo", -100, 60)
+    wait(10)
+    gyrouniversal(-25)
 if __name__ == '__main__':
     main()
+# Fim do seguidor.py

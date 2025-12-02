@@ -39,6 +39,8 @@ min_esq = 100
 max_esq = 0
 min_dir = 100
 max_dir = 0
+# Contador para rampa inicial de correção (evita pulso/zigzag nos primeiros ciclos)
+moviment_call_count = 0
 
 
 # Parâmetros do GyroTurn
@@ -57,15 +59,13 @@ def PID(kp, ki, kd, erro, integral, last_error, wait_func):
     return correction, integral, last_error
 
 
-def gyrouniversal(parametro , rotate_mode=None):
+def gyrouniversal(parametro, rotate_mode=None, kp=1.8, ki=0, kd=0.5):
     """Gira o robô em torno do seu eixo até atingir um ângulo alvo."""
     integral = 0
     last_error = 0
     correction = 0
 
-    kp = 2
-    ki = 0.001
-    kd = 0.3
+    # kp, ki, kd are received as parameters (defaults provided in signature)
 
     hub.imu.reset_heading(0)
     alvo = parametro
@@ -74,34 +74,48 @@ def gyrouniversal(parametro , rotate_mode=None):
         return ((alvo - atual + 540) % 360) - 180
     erro = erro_angular(alvo, hub.imu.heading())
 
+    # Detecta automaticamente qual sentido de potência produz giro positivo
+    # (evita problemas quando a fiação/mapeamento dos motores tem convenção diferente).
+    try:
+        heading_before = hub.imu.heading()
+        test_power = max(20, GYRO_MIN // 2)
+        # pequeno pulso: right forward, left backward
+        right_motor.dc(test_power)
+        left_motor.dc(-test_power)
+        wait(80)
+        right_motor.brake()
+        left_motor.brake()
+        wait(40)
+        heading_after = hub.imu.heading()
+        delta_head = ((heading_after - heading_before + 540) % 360) - 180
+        rotate_positive_sign = 1 if delta_head >= 0 else -1
+    except Exception:
+        rotate_positive_sign = 1
+
     while abs(erro) > GYRO_TOL:
         correction, integral, last_error = PID(kp, ki, kd, erro, integral, last_error, wait)
-        potencia = int(min(GYRO_MAX, max(GYRO_MIN, abs(correction))))
+        # Determina magnitude da potência (sempre positiva) e aplica direção
+        # com base no sinal da correção. Isso evita inversões de sentido
+        # por causa de mudanças na convenção de sinais.
+        pot_mag = abs(correction)
+        # Limita magnitude entre mínimo e máximo definidos
+        if pot_mag < GYRO_MIN:
+            pot_mag = GYRO_MIN
+        if pot_mag > GYRO_MAX:
+            pot_mag = GYRO_MAX
+        pot_mag = int(pot_mag)
+
+        # Aplica potência preservando o sentido da correção (positive -> giro no sentido positivo)
+        sign = 1 if correction >= 0 else -1
+        right_motor.dc(sign * rotate_positive_sign * pot_mag)
+        left_motor.dc(-sign * rotate_positive_sign * pot_mag)
+
         if rotate_mode == "calibrar":
             ler_e_atualizar()
-        if rotate_mode == None:
-            if erro > 0:
-                right_motor.dc(potencia)
-                left_motor.dc(-potencia)
-            else:
-                right_motor.dc(-potencia)
-                left_motor.dc(potencia)
-            
-        elif rotate_mode == "calibrar":
-            if erro > 0:
-                right_motor.dc(potencia)
-                left_motor.dc(-potencia)
-            else:
-                right_motor.dc(-potencia)
-                left_motor.dc(potencia)
+        # A lógica de 'else' para 'rotate_mode' diferente de 'calibrar' ou 'None' foi removida
+        # pois o comportamento de giro no eixo é o mesmo. Se precisar de um giro
+        # com uma roda parada, seria melhor criar uma função separada.
 
-        else:
-            if erro > 0:
-                right_motor.dc(potencia)
-                left_motor.dc(0)
-            else:
-                right_motor.dc(0)
-                left_motor.dc(potencia)
         erro = erro_angular(alvo, hub.imu.heading())
 
     right_motor.hold()
@@ -124,25 +138,35 @@ def gyrouniversal(parametro , rotate_mode=None):
 
 
 def moviment(kp, ki, kd, erro, integral, last_error, wait, speed):
-    """Função auxiliar que aplica controle PID simples para manter heading = 0."""
+    """Função auxiliar que aplica controle PID simples para manter heading = 0.
+
+    Retorna o erro, integral e last_error atualizados para preservação do estado
+    do PID entre iterações.
+    """
     angulo_atual = hub.imu.heading()
     erro = angulo_atual - 0
     correction, integral, last_error = PID(kp, ki, kd, erro, integral, last_error, wait)
-    left_motor.dc(speed - correction)
-    right_motor.dc(speed + correction)
-    last_error = erro
-    wait(10)
+    left_power = speed + correction
+    right_power = speed - correction
+
+    left_motor.dc(left_power)
+    right_motor.dc(right_power)
+
+    return erro, integral, last_error
 
 
-def gyro_move_universal(mode, velocidade, parametro=None):
-    """Método universal para movimentação com diferentes critérios de parada."""
+def gyro_move_universal(mode, velocidade, parametro=None, kp=-2, ki=0.001, kd=0.6):
+    """Método universal para movimentação com diferentes critérios de parada.
+
+    Os ganhos `kp`, `ki`, `kd` têm valores padrão mais conservadores adequados
+    para iniciar testes (reduzem respostas agressivas que causam zigzag/giro
+    ao mover para ré). Ajuste conforme necessário quando testar no robô.
+    """
     redefinir()
     erro = 0
     integral = 0
     last_error = 0
-    kp = -2.8
-    ki = 0.001
-    kd = 0.8
+    # kp, ki, kd can be tuned via parameters (defaults chosen conservatively)
     hub.imu.reset_heading(0)
     robot.reset(0, 0)
     left_motor.reset_angle(0)
@@ -150,32 +174,37 @@ def gyro_move_universal(mode, velocidade, parametro=None):
 
     if mode == "dois_pretos":
         while color_sensor_esquerdo.reflection() > 20 and color_sensor_direito.reflection() > 20:
-            moviment(kp, ki, kd, erro, integral, last_error, wait, velocidade)
+            erro, integral, last_error = moviment(kp, ki, kd, erro, integral, last_error, wait, velocidade)
         print("Hello Word")
         left_motor.brake()
         right_motor.brake()
     elif mode == "um_preto":
         while color_sensor_esquerdo.reflection() > 20 or color_sensor_direito.reflection() > 20:
-            moviment(kp, ki, kd, erro, integral, last_error, wait, velocidade)
+            erro, integral, last_error = moviment(kp, ki, kd, erro, integral, last_error, wait, velocidade)
         left_motor.brake()
         right_motor.brake()
+    
+    elif mode == "angulo":
+        while True:
+            erro, integral, last_error = moviment(kp, ki, kd, erro, integral, last_error, wait, velocidade)
+            # calcula a rotação média dos dois motores corretamente
+            rot_atual = (left_motor.angle() + right_motor.angle()) / 2
+            distancia_atual = abs(rot_atual) / 360 * (2 * 3.14159 * (55 / 10))
+            if abs(distancia_atual) >= abs(parametro):
+                left_motor.hold()
+                right_motor.hold()
+                break
+            print(hub.imu.heading())
+
+    """
     elif mode == "distancia":
         while True:
-            moviment(kp, ki, kd, erro, integral, last_error, wait, velocidade)
+            erro, integral, last_error = moviment(kp, ki, kd, erro, integral, last_error, wait, velocidade)
             if ultra.distance() <= parametro:
                 break
         left_motor.brake()
         right_motor.brake()
-    elif mode == "angulo":
-        while True:
-            if velocidade < 0:
-                kp = -2
-            moviment(kp, ki, kd, erro, integral, last_error, wait, velocidade)
-            rot_atual = left_motor.angle() + right_motor.angle() / 2
-            distancia_atual = abs(rot_atual) / 360 * (2 * 3.14159 * (55 / 10))
-
-            if distancia_atual >= abs(parametro):
-                break
+    """
 
 def calibrar():
     global GYRO_MAX, GYRO_MIN
