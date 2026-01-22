@@ -52,14 +52,15 @@ GYRO_MAX = 60
 def PID(kp, ki, kd, erro, integral, last_error, wait_func):
     """Implementação simples de PID usado nas rotinas de giroscópio."""
     integral += erro
-    derivado = erro - last_error
+    # Calcula derivada tratando a passagem por -180/180 para evitar grandes saltos
+    derivado = ((erro - last_error + 540) % 360) - 180
     correction = kp * erro + ki * integral + kd * derivado
     last_error = erro
     wait_func(0)
     return correction, integral, last_error
 
 
-def gyrouniversal(parametro, rotate_mode=None, kp=1.8, ki=0, kd=0.5):
+def gyrouniversal(parametro, rotate_mode=None, kp=1.8, ki=0, kd=0.5, debug=False):
     """Gira o robô em torno do seu eixo até atingir um ângulo alvo."""
     integral = 0
     last_error = 0
@@ -77,18 +78,48 @@ def gyrouniversal(parametro, rotate_mode=None, kp=1.8, ki=0, kd=0.5):
     # Detecta automaticamente qual sentido de potência produz giro positivo
     # (evita problemas quando a fiação/mapeamento dos motores tem convenção diferente).
     try:
+        # Faz múltiplos pulsos curtos em cada sentido e usa média para robustez
         heading_before = hub.imu.heading()
         test_power = max(20, GYRO_MIN // 2)
-        # pequeno pulso: right forward, left backward
-        right_motor.dc(test_power)
-        left_motor.dc(-test_power)
-        wait(80)
-        right_motor.brake()
-        left_motor.brake()
-        wait(40)
-        heading_after = hub.imu.heading()
-        delta_head = ((heading_after - heading_before + 540) % 360) - 180
-        rotate_positive_sign = 1 if delta_head >= 0 else -1
+        samples = 3
+        deltas_a = []
+        deltas_b = []
+        for i in range(samples):
+            # Pulso direção A (right forward, left backward)
+            right_motor.dc(test_power)
+            left_motor.dc(-test_power)
+            wait(60)
+            right_motor.brake()
+            left_motor.brake()
+            wait(30)
+            h = hub.imu.heading()
+            deltas_a.append(((h - heading_before + 540) % 360) - 180)
+            wait(20)
+
+        for i in range(samples):
+            # Pulso direção B (direção oposta)
+            right_motor.dc(-test_power)
+            left_motor.dc(test_power)
+            wait(60)
+            right_motor.brake()
+            left_motor.brake()
+            wait(30)
+            h = hub.imu.heading()
+            deltas_b.append(((h - heading_before + 540) % 360) - 180)
+            wait(20)
+
+        avg_a = sum(deltas_a) / len(deltas_a) if deltas_a else 0
+        avg_b = sum(deltas_b) / len(deltas_b) if deltas_b else 0
+        # Escolhe o sentido que produziu maior deslocamento médio
+        if abs(avg_a) >= abs(avg_b):
+            rotate_positive_sign = 1 if avg_a >= 0 else -1
+        else:
+            rotate_positive_sign = 1 if avg_b >= 0 else -1
+        if debug:
+            try:
+                print(f"gyro detect: avg_a={avg_a:.1f}, avg_b={avg_b:.1f}, rotate_positive_sign={rotate_positive_sign}")
+            except Exception:
+                pass
     except Exception:
         rotate_positive_sign = 1
 
@@ -109,6 +140,12 @@ def gyrouniversal(parametro, rotate_mode=None, kp=1.8, ki=0, kd=0.5):
         sign = 1 if correction >= 0 else -1
         right_motor.dc(sign * rotate_positive_sign * pot_mag)
         left_motor.dc(-sign * rotate_positive_sign * pot_mag)
+
+        if debug:
+            try:
+                print(f"gyrouniversal: alvo={alvo}, heading={hub.imu.heading():.1f}, erro={erro:.1f}, corr={correction:.1f}, pot={pot_mag}, sign={sign}, rps={rotate_positive_sign}")
+            except Exception:
+                pass
 
         if rotate_mode == "calibrar":
             ler_e_atualizar()
@@ -146,8 +183,10 @@ def moviment(kp, ki, kd, erro, integral, last_error, wait, speed):
     angulo_atual = hub.imu.heading()
     erro = angulo_atual - 0
     correction, integral, last_error = PID(kp, ki, kd, erro, integral, last_error, wait)
-    left_power = speed + correction
-    right_power = speed - correction
+    # Unifica convenção de sinais com o seguidor de linha e LQR
+    # (correction positivo reduz potência da roda esquerda e aumenta da direita)
+    left_power = speed - correction
+    right_power = speed + correction
 
     left_motor.dc(left_power)
     right_motor.dc(right_power)
@@ -210,9 +249,8 @@ def calibrar():
     global GYRO_MAX, GYRO_MIN
     GYRO_MAX = 100
     GYRO_MIN = 40
-    gyrouniversal(45, "calibrar")
-    gyrouniversal(-90, "calibrar")
-    gyrouniversal(45, "calibrar")
+    gyrouniversal(180, "calibrar")
+    gyrouniversal(180, "calibrar")
     GYRO_MIN = 20
     GYRO_MAX = 80
 

@@ -332,12 +332,9 @@ def main():
     # Para alterar a velocidade do robot.straight(), use robot.settings().
     # O valor é em milímetros por segundo (mm/s).
     # Exemplo: definindo a velocidade para 200 mm/s.
-    robot.settings(straight_speed=800)
-    gyro_move_universal("angulo", 100, 140)
-    wait(10)
-    gyro_move_universal("angulo", -100, 60)
-    wait(10)
-    gyrouniversal(-25)
+    seguidor = LineFollower()
+    seguidor.calibracao()
+    seguidor.calculate_pid(start_speed=40, speed_oscilation=30)
 if __name__ == '__main__':
     main()
 # Fim do seguidor.py

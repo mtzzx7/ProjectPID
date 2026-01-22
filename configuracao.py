@@ -29,8 +29,8 @@ right_motor = Motor(Port.B, Direction.CLOCKWISE)
 # Sensores de cor (reflexão) utilizados pelo seguidor de linha
 # - sensor direito: porta D
 # - sensor esquerdo: porta C
-color_sensor_direito = ColorSensor(Port.D)
-color_sensor_esquerdo = ColorSensor(Port.C)
+color_sensor_direito = ColorSensor(Port.C)
+color_sensor_esquerdo = ColorSensor(Port.D)
 
 
 # Parâmetros físicos do robô (importante para o DriveBase)
